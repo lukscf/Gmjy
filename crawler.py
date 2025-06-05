@@ -1,4 +1,4 @@
-# Required libraries: selenium, pandas, unidecode, prompt_toolkit
+# Lembrar de colocar as bibliotecas necessárias: selenium, pandas, unidecode
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
@@ -8,36 +8,29 @@ from webdriver_manager.chrome import ChromeDriverManager
 import pandas as pd
 from datetime import datetime, timedelta
 import time
-from unidecode import unidecode  # Library to remove accents
-from prompt_toolkit import PromptSession
-from prompt_toolkit.completion import WordCompleter
+from unidecode import unidecode  # Biblioteca para remover acentos
 
-# Function to generate slugs from city names
+# Função para gerar slugs a partir do nome da cidade
 def create_slug(city_name):
-    # Remove accents, convert to lowercase, and replace spaces with underscores
     slug = unidecode(city_name.lower()).replace(" - ", "-").replace(" ", "_")
     return slug
 
-# Load the list of cities from the CSV on GitHub
+# Carregar a lista de cidades do arquivo CSV no GitHub
 cities_url = "https://raw.githubusercontent.com/lukscf/Flix/main/brazilian-cities.csv"
-print("Loading city list from GitHub...")
+print("Carregando lista de cidades do GitHub...")
 cities_df = pd.read_csv(cities_url)
 
-# Build the dictionary of cities
+# Construir o dicionário de cidades
 cities = {}
 for idx, row in cities_df.iterrows():
-    city_name = unidecode(row["city"])  # Remove accents from city name
+    city_name = unidecode(row["city"])  # Remove acentos do nome da cidade
     city_name_with_uf = f"{city_name} - {row['state']}"
     cities[str(idx + 1)] = {
         "name": city_name_with_uf,
         "slug": create_slug(city_name_with_uf)
     }
 
-# Create a list of city names for reference
-city_names = [city["name"] for city in cities.values()]
-print(f"Total cities loaded: {len(city_names)}")
-
-# Predefined list of city pairs to process
+# Lista de pares de cidades a processar
 city_pairs = [
     ("Fortaleza - CE", "Recife - PE"),
     ("Joao Pessoa - PB", "Recife - PE"),
@@ -48,120 +41,112 @@ city_pairs = [
     ("Sao Paulo - SP", "Brasilia - DF")
 ]
 
-# Function to find slugs for a city pair
-def get_city_slugs(origin_name, destination_name):
+# Função para obter slugs das cidades a partir dos nomes
+def get_city_slugs(origin_name, destination_name, cities):
     origin_entry = next((city for city in cities.values() if city["name"].lower() == origin_name.lower()), None)
     destination_entry = next((city for city in cities.values() if city["name"].lower() == destination_name.lower()), None)
     
     if not origin_entry or not destination_entry:
-        print(f"Error: One or both cities not found - {origin_name} or {destination_name}")
+        print(f"Erro: Cidade(s) não encontrada(s) - Origem: {origin_name}, Destino: {destination_name}")
         return None, None, None, None
     
     return origin_entry["slug"], origin_name, destination_entry["slug"], destination_name
 
-# Function to test city combinations with and without "-all (TODOS EM PORTUGUES)"
-def test_city_combinations(driver, origin_slug, destination_slug, departure_date):
+# Função para testar combinações de cidades com e sem "-todos"
+def test_city_combinations(driver, origin_base, destination_base, departure_date):
     combinations = [
-        (f"{origin_slug}-todos", f"{destination_slug}-todos"),
-        (f"{origin_slug}-todos", destination_slug),
-        (origin_slug, f"{destination_slug}-todos"),
-        (origin_slug, destination_slug),
+        (f"{origin_base}-todos", f"{destination_base}-todos"),
+        (f"{origin_base}-todos", destination_base),
+        (origin_base, f"{destination_base}-todos"),
+        (origin_base, destination_base),
     ]
 
-    for origin_test_slug, destination_test_slug in combinations:
-        url = f"https://www.viajeguanabara.com.br/onibus/{origin_test_slug}/{destination_test_slug}?departureDate={departure_date}&passengers=1:1"
-        print(f"\nTesting combination: {origin_test_slug} -> {destination_test_slug}")
-        print(f"Accessing URL: {url}")
+    for origin_slug, destination_slug in combinations:
+        url = f"https://www.viajeguanabara.com.br/onibus/{origin_slug}/{destination_slug}?departureDate={departure_date}&passengers=1:1"
+        print(f"\nTestando combinação: {origin_slug} -> {destination_slug}")
+        print(f"Acessando URL: {url}")
         driver.get(url)
 
-        # Wait up to 60 seconds for the page to load and check for trips
         try:
-            WebDriverWait(driver, 60).until(
+            WebDriverWait(driver, 20).until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, "app-trip"))
             )
             trips = driver.find_elements(By.CSS_SELECTOR, "app-trip")
             if trips:
-                print(f"Combination successful! Found {len(trips)} trips.")
-                return origin_test_slug, destination_test_slug
+                print(f"Combinação bem-sucedida! Encontradas {len(trips)} viagens.")
+                return origin_slug, destination_slug
             else:
-                print("No trips found for this combination.")
+                print("Nenhuma viagem encontrada para esta combinação.")
         except Exception as e:
-            print(f"Error testing combination: {e}")
+            print(f"Erro ao testar combinação: {e}")
             continue
 
-    print("No valid combination found for the provided cities.")
+    print("Nenhuma combinação válida encontrada para as cidades fornecidas.")
     return None, None
 
-# Function to extract occupancy after clicking
+# Função para extrair ocupação após clique
 def get_occupancy(trip_id, driver):
     try:
-        print(f"Clicking to display occupancy for trip {trip_id}...")
+        print(f"Clicando para exibir ocupação da viagem {trip_id}...")
         driver.find_element(By.CSS_SELECTOR, f"#{trip_id} [data-testid='selectTripAction']").click()
         WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.CSS_SELECTOR, f"#{trip_id} .vehicle-item"))
         )
 
-        # Extract occupancy
         seats = driver.find_elements(By.CSS_SELECTOR, f"#{trip_id} .vehicle-item")
         total_seats = 0
         occupied_seats = 0
         for seat in seats:
-            if "item-empty" not in seat.get_attribute("class"):  # Ignore aisles
+            if "item-empty" not in seat.get_attribute("class"):
                 total_seats += 1
                 if "item-ecommerce-blocked" in seat.get_attribute("class"):
                     occupied_seats += 1
 
         available_seats = total_seats - occupied_seats
         load_factor = occupied_seats / total_seats if total_seats > 0 else 0
-        print(f"Occupancy for {trip_id}: {available_seats} seats available out of {total_seats} (load factor: {load_factor:.2f})")
+        print(f"Ocupação para {trip_id}: {available_seats} assentos disponíveis de {total_seats} (load factor: {load_factor:.2f})")
         return available_seats, total_seats, load_factor
     except Exception as e:
-        print(f"Error collecting occupancy for {trip_id}: {e}")
+        print(f"Erro ao coletar ocupação para {trip_id}: {e}")
         return None, None, None
     finally:
-        # Close the occupancy section, if open
         try:
             driver.find_element(By.CSS_SELECTOR, f"#{trip_id} .btn-outline").click()
             time.sleep(1)
         except:
             pass
 
-# Function to scrape trip data for a given city pair and date
+# Função para coletar dados de todas as viagens
 def scrape_guanabara_trips(origin_slug, origin_name, destination_slug, destination_name, departure_date, driver):
     url = f"https://www.viajeguanabara.com.br/onibus/{origin_slug}/{destination_slug}?departureDate={departure_date}&passengers=1:1"
-    print(f"Accessing URL: {url}")
+    print(f"Acessando URL: {url}")
     driver.get(url)
 
-    # Wait up to 60 seconds for the page to load and check for trips
     try:
-        WebDriverWait(driver, 60).until(
+        WebDriverWait(driver, 20).until(
             EC.presence_of_element_located((By.CSS_SELECTOR, "app-trip"))
         )
     except Exception as e:
-        print(f"Error loading page: {e}")
+        print(f"Erro ao carregar a página: {e}")
         return []
 
-    # Check if the page is blocked (e.g., CAPTCHA)
-    if "CAPTCHA" in driver.page_source or "blocked" in driver.page_source.lower():
-        print("The page appears to be blocked by CAPTCHA or anti-scraping measures. Manual intervention required.")
+    if "CAPTCHA" in driver.page_source or "bloqueado" in driver.page_source.lower():
+        print("A página parece estar bloqueada por CAPTCHA ou anti-scraping. Intervenção manual necessária.")
         return []
 
-    # Find all trips
     trips = driver.find_elements(By.CSS_SELECTOR, "app-trip")
     if not trips:
-        print("No trips found on the page.")
+        print("Nenhuma viagem encontrada na página.")
         return []
 
-    print(f"Found {len(trips)} trips on the page.")
+    print(f"Encontradas {len(trips)} viagens na página.")
     trip_data = []
 
     for trip in trips:
         try:
-            # Extract trip ID
             trip_id = trip.find_element(By.CSS_SELECTOR, "[data-testid^='idTrip']").get_attribute("id")
-            print(f"Processing trip {trip_id}...")
+            print(f"Processando viagem {trip_id}...")
 
-            # Extract visible information
             route = trip.find_element(By.CSS_SELECTOR, ".trip-route").text.strip().replace("\n", " -> ")
             trip_class = trip.find_element(By.CSS_SELECTOR, "[data-testid='tripClassNameOutput']").text.strip()
             departure_time = trip.find_element(By.CSS_SELECTOR, "[data-testid='tripDepartureTimeOutput'] .trip-time-number").text.strip()
@@ -171,87 +156,96 @@ def scrape_guanabara_trips(origin_slug, origin_name, destination_slug, destinati
             price = trip.find_element(By.CSS_SELECTOR, "[data-testid='tripPriceOutput']").text.strip()
             old_price = trip.find_element(By.CSS_SELECTOR, ".old-value").text.strip() if trip.find_elements(By.CSS_SELECTOR, ".old-value") else "N/A"
             boarding_point = trip.find_element(By.CSS_SELECTOR, ".boarding__location").text.strip()
-            connections = trip.find_element(By.CSS_SELECTOR, ".details__connections").text.strip() if trip.find_elements(By.CSS_SELECTOR, ".details__connections") else "No"
+            connections = trip.find_element(By.CSS_SELECTOR, ".details__connections").text.strip() if trip.find_elements(By.CSS_SELECTOR, ".details__connections") else "Não"
 
-            # Extract occupancy
             available_seats, total_seats, load_factor = get_occupancy(trip_id, driver)
 
-            # Store data, including origin and destination
             trip_data.append({
-                "origin": origin_name,
-                "destination": destination_name,
-                "route": route,
-                "class": trip_class,
-                "schedule": f"{departure_time} - {arrival_time}{' (+1)' if next_day else ''}",
-                "duration": duration,
-                "original_fare": old_price,
-                "promotional_fare": price,
-                "connection": connections,
-                "boarding_point": boarding_point,
-                "available_seats": available_seats,
-                "total_seats": total_seats,
+                "origem": origin_name,
+                "destino": destination_name,
+                "trecho": route,
+                "classe": trip_class,
+                "horario": f"{departure_time} - {arrival_time}{' (+1)' if next_day else ''}",
+                "duracao": duration,
+                "tarifa_original": old_price,
+                "tarifa_promocional": price,
+                "conexao": connections,
+                "ponto_embarque": boarding_point,
+                "assentos_disponiveis": available_seats,
+                "total_assentos": total_seats,
                 "load_factor": load_factor
             })
 
         except Exception as e:
-            print(f"Error processing trip {trip_id}: {e}")
+            print(f"Erro ao processar viagem {trip_id}: {e}")
             continue
 
     return trip_data
 
-# Set up the driver
+# Configurar o driver
 options = webdriver.ChromeOptions()
 options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/91.0.4472.124")
 driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
 
-# Set the base date to tomorrow
-base_date = datetime.now() + timedelta(days=1)
+# Definir a data base com base na escolha do usuário
+while True:
+    start_date_choice = input("Digite a data de início (Hoje ou Amanhã): ").strip().lower()
+    if start_date_choice == "hoje":
+        base_date = datetime.now()
+        print(f"Data base definida como hoje: {base_date.strftime('%d-%m-%Y')}")
+        break
+    elif start_date_choice == "amanhã" or start_date_choice == "amanha":
+        base_date = datetime.now() + timedelta(days=1)
+        print(f"Data base definida como amanhã: {base_date.strftime('%d-%m-%Y')}")
+        break
+    else:
+        print("Opção inválida! Por favor, digite 'Hoje' ou 'Amanhã'.")
 
-# Define future days to collect snapshots
+# Definir os dias futuros para coletar snapshots
 days_ahead = [1, 3, 5, 7, 10, 14]
 all_data = []
 
-# Iterate over city pairs
+# Iterar sobre os pares de cidades
 for origin_name, destination_name in city_pairs:
-    print(f"\n=== Processing City Pair: {origin_name} -> {destination_name} ===")
+    print(f"\n=== Processando par de cidades: {origin_name} -> {destination_name} ===")
     
-    # Get slugs for the city pair
-    origin_slug, origin_name, destination_slug, destination_name = get_city_slugs(origin_name, destination_name)
+    # Obter slugs das cidades
+    origin_base, origin_name, destination_base, destination_name = get_city_slugs(origin_name, destination_name, cities)
     
+    if not origin_base or not destination_base:
+        print(f"Pulando par {origin_name} -> {destination_name} devido a erro nas cidades.")
+        continue
+
+    # Testar combinações de cidades com e sem "-todos"
+    print("\n=== Testando Combinações de Cidades ===")
+    origin_slug, destination_slug = test_city_combinations(driver, origin_base, destination_base, base_date.strftime("%d-%m-%Y"))
+
     if not origin_slug or not destination_slug:
-        print(f"Skipping city pair {origin_name} -> {destination_name} due to missing slugs.")
+        print(f"Não foi possível encontrar uma combinação válida para {origin_name} -> {destination_name}. Pulando.")
         continue
 
-    # Test city combinations with and without "-all"
-    print("\n=== Testing City Combinations ===")
-    origin_test_slug, destination_test_slug = test_city_combinations(driver, origin_slug, destination_slug, base_date.strftime("%d-%m-%Y"))
-
-    if not origin_test_slug or not destination_test_slug:
-        print(f"No valid combination found for {origin_name} -> {destination_name}. Skipping.")
-        continue
-
-    # Iterate over future days
+    # Iterar sobre os dias futuros
     for days in days_ahead:
         target_date = (base_date + timedelta(days=days)).strftime("%d-%m-%Y")
-        print(f"\nCollecting data for {target_date}...")
-        data = scrape_guanabara_trips(origin_test_slug, origin_name, destination_test_slug, destination_name, target_date, driver)
+        print(f"\nColetando dados para {target_date}...")
+        data = scrape_guanabara_trips(origin_slug, origin_name, destination_slug, destination_name, target_date, driver)
         for entry in data:
-            entry["query_date"] = target_date
+            entry["data_consulta"] = target_date
         all_data.extend(data)
 
 driver.quit()
 
-# Remove accents from all strings before saving to CSV
+# Remover acentos de todas as strings antes de salvar no CSV
 for entry in all_data:
     for key, value in entry.items():
         if isinstance(value, str):
             entry[key] = unidecode(value)
 
-# Save to CSV
+# Salvar em CSV
 if all_data:
     df = pd.DataFrame(all_data)
     df.to_csv("guanabara_trips_data.csv", index=False, encoding='utf-8')
-    print("\nCollected data:")
+    print("\nDados coletados:")
     print(df)
 else:
-    print("\nNo data was collected. Check the logs above to identify the issue.")
+    print("\nNenhum dado foi coletado. Verifique os logs acima para identificar o problema.")
