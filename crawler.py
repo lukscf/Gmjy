@@ -173,8 +173,9 @@ def scrape_guanabara_trips(origin_slug, origin_name, destination_slug, destinati
                 "ponto_embarque": boarding_point,
                 "assentos_disponiveis": available_seats,
                 "total_assentos": total_seats,
-                "load_factor": load_factor
-            })
+                "load_factor": load_factor,
+                'Coletado_dia': datetime.now()
+        })
 
         except Exception as e:
             print(f"Erro ao processar viagem {trip_id}: {e}")
