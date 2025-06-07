@@ -1,4 +1,4 @@
-# Lembrar de colocar as bibliotecas necessarias: selenium, pandas, unidecode
+# Lembrar de colocar as bibliotecas necessarias: selenium, pandas, unidecode, openpyxl
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
@@ -117,7 +117,7 @@ def get_occupancy(trip_id, driver):
             pass
 
 # Funcao para coletar dados de todas as viagens
-def scrape_guanabara_trips(origin_slug, origin_name, destination_slug, destination_name, departure_date, driver):
+def scrape_guanabara_trips(origin_slug, origin_name, destination_slug, destination_name, departure_date, driver, collect_date):
     url = f"https://www.viajeguanabara.com.br/onibus/{origin_slug}/{destination_slug}?departureDate={departure_date}&passengers=1:1"
     print(f"Acessando URL: {url}")
     driver.get(url)
@@ -174,8 +174,9 @@ def scrape_guanabara_trips(origin_slug, origin_name, destination_slug, destinati
                 "assentos_disponiveis": available_seats,
                 "total_assentos": total_seats,
                 "load_factor": load_factor,
-                'Coletado_dia': datetime.now()
-        })
+                "data_consulta": departure_date,
+                "Coletado_dia": collect_date  # Adiciona a data de coleta
+            })
 
         except Exception as e:
             print(f"Erro ao processar viagem {trip_id}: {e}")
@@ -195,12 +196,15 @@ while True:
         base_date = datetime.now()
         print(f"Data base definida como hoje: {base_date.strftime('%d-%m-%Y')}")
         break
-    elif start_date_choice == "amanha" or start_date_choice == "amanha":
+    elif start_date_choice == "amanha":
         base_date = datetime.now() + timedelta(days=1)
         print(f"Data base definida como amanha: {base_date.strftime('%d-%m-%Y')}")
         break
     else:
         print("Opcao invalida! Por favor, digite 'Hoje' ou 'Amanha'.")
+
+# Data de coleta (data em que o script foi executado)
+collect_date = datetime.now().strftime("%d-%m-%Y")
 
 # Definir os dias futuros para coletar snapshots
 days_ahead = [1, 3, 5, 7, 10, 14]
@@ -229,24 +233,22 @@ for origin_name, destination_name in city_pairs:
     for days in days_ahead:
         target_date = (base_date + timedelta(days=days)).strftime("%d-%m-%Y")
         print(f"\nColetando dados para {target_date}...")
-        data = scrape_guanabara_trips(origin_slug, origin_name, destination_slug, destination_name, target_date, driver)
-        for entry in data:
-            entry["data_consulta"] = target_date
+        data = scrape_guanabara_trips(origin_slug, origin_name, destination_slug, destination_name, target_date, driver, collect_date)
         all_data.extend(data)
 
 driver.quit()
 
-# Remover acentos de todas as strings antes de salvar no CSV
+# Remover acentos de todas as strings antes de salvar no XLSX
 for entry in all_data:
     for key, value in entry.items():
         if isinstance(value, str):
             entry[key] = unidecode(value)
 
-# Salvar em CSV
+# Salvar em XLSX
 if all_data:
     df = pd.DataFrame(all_data)
-    df.to_csv("guanabara_trips_data.csv", index=False, encoding='utf-8')
-    print("\nDados coletados:")
+    df.to_excel("guanabara_trips_data.xlsx", index=False, engine='openpyxl')
+    print("\nDados coletados e salvos em guanabara_trips_data.xlsx:")
     print(df)
 else:
     print("\nNenhum dado foi coletado. Verifique os logs acima para identificar o problema.")
