@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # Lembrar de colocar as bibliotecas necessarias: selenium, pandas, unidecode, openpyxl
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -8,7 +9,37 @@ from webdriver_manager.chrome import ChromeDriverManager
 import pandas as pd
 from datetime import datetime, timedelta
 import time
-from unidecode import unidecode  # Biblioteca para remover acentos
+from unidecode import unidecode
+
+# Funcao para converter preco de texto para float
+def convert_price(price_text):
+    if price_text == "N/A":
+        return None
+    try:
+        # Remove "R$" e substitui virgula por ponto
+        cleaned_price = price_text.replace("R$", "").replace(",", ".").strip()
+        return float(cleaned_price)
+    except (ValueError, AttributeError) as e:
+        print(f"Erro ao converter preco '{price_text}': {e}")
+        return None
+
+# Funcao para calcular PBD
+def calculate_pbd(departure_date, collect_date):
+    try:
+        departure = datetime.strptime(departure_date, "%d-%m-%Y")
+        collected = datetime.strptime(collect_date, "%d-%m-%Y")
+        pbd = (departure - collected).days
+        return pbd
+    except ValueError as e:
+        print(f"Erro ao calcular PBD: {e}")
+        return None
+
+# Funcao para decodificar texto com seguranca
+def safe_decode(text):
+    try:
+        return text.encode('utf-8').decode('utf-8')
+    except UnicodeDecodeError:
+        return text.encode('utf-8').decode('latin1')
 
 # Funcao para gerar slugs a partir do nome da cidade
 def create_slug(city_name):
@@ -18,7 +49,7 @@ def create_slug(city_name):
 # Carregar a lista de cidades do arquivo CSV no GitHub
 cities_url = "https://raw.githubusercontent.com/lukscf/Flix/main/brazilian-cities.csv"
 print("Carregando lista de cidades do GitHub...")
-cities_df = pd.read_csv(cities_url)
+cities_df = pd.read_csv(cities_url, encoding='latin1')  # Usar latin1 para evitar UnicodeDecodeError
 
 # Construir o dicionario de cidades
 cities = {}
@@ -147,16 +178,20 @@ def scrape_guanabara_trips(origin_slug, origin_name, destination_slug, destinati
             trip_id = trip.find_element(By.CSS_SELECTOR, "[data-testid^='idTrip']").get_attribute("id")
             print(f"Processando viagem {trip_id}...")
 
-            route = trip.find_element(By.CSS_SELECTOR, ".trip-route").text.strip().replace("\n", " -> ")
-            trip_class = trip.find_element(By.CSS_SELECTOR, "[data-testid='tripClassNameOutput']").text.strip()
-            departure_time = trip.find_element(By.CSS_SELECTOR, "[data-testid='tripDepartureTimeOutput'] .trip-time-number").text.strip()
-            arrival_time = trip.find_element(By.CSS_SELECTOR, "[data-testid='triparrivalTimeOutput'] .trip-time-number").text.strip()
-            next_day = "+1" in trip.find_element(By.CSS_SELECTOR, "[data-testid='triparrivalTimeOutput']").text
-            duration = trip.find_element(By.CSS_SELECTOR, "[data-testid='tripDurationOutput'] .trip-durantion").text.strip()
-            price = trip.find_element(By.CSS_SELECTOR, "[data-testid='tripPriceOutput']").text.strip()
-            old_price = trip.find_element(By.CSS_SELECTOR, ".old-value").text.strip() if trip.find_elements(By.CSS_SELECTOR, ".old-value") else "N/A"
-            boarding_point = trip.find_element(By.CSS_SELECTOR, ".boarding__location").text.strip()
-            connections = trip.find_element(By.CSS_SELECTOR, ".details__connections").text.strip() if trip.find_elements(By.CSS_SELECTOR, ".details__connections") else "Nao"
+            route = safe_decode(trip.find_element(By.CSS_SELECTOR, ".trip-route").text.strip().replace("\n", " -> "))
+            trip_class = safe_decode(trip.find_element(By.CSS_SELECTOR, "[data-testid='tripClassNameOutput']").text.strip())
+            departure_time = safe_decode(trip.find_element(By.CSS_SELECTOR, "[data-testid='tripDepartureTimeOutput'] .trip-time-number").text.strip())
+            arrival_time = safe_decode(trip.find_element(By.CSS_SELECTOR, "[data-testid='triparrivalTimeOutput'] .trip-time-number").text.strip())
+            next_day = "+1" in safe_decode(trip.find_element(By.CSS_SELECTOR, "[data-testid='triparrivalTimeOutput']").text)
+            duration = safe_decode(trip.find_element(By.CSS_SELECTOR, "[data-testid='tripDurationOutput'] .trip-durantion").text.strip())
+            price = safe_decode(trip.find_element(By.CSS_SELECTOR, "[data-testid='tripPriceOutput']").text.strip())
+            old_price = safe_decode(trip.find_element(By.CSS_SELECTOR, ".old-value").text.strip()) if trip.find_elements(By.CSS_SELECTOR, ".old-value") else "N/A"
+            boarding_point = safe_decode(trip.find_element(By.CSS_SELECTOR, ".boarding__location").text.strip())
+            connections = safe_decode(trip.find_element(By.CSS_SELECTOR, ".details__connections").text.strip()) if trip.find_elements(By.CSS_SELECTOR, ".details__connections") else "Nao"
+
+            price_float = convert_price(price)
+            old_price_float = convert_price(old_price)
+            pbd = calculate_pbd(departure_date, collect_date)
 
             available_seats, total_seats, load_factor = get_occupancy(trip_id, driver)
 
@@ -167,15 +202,16 @@ def scrape_guanabara_trips(origin_slug, origin_name, destination_slug, destinati
                 "classe": trip_class,
                 "horario": f"{departure_time} - {arrival_time}{' (+1)' if next_day else ''}",
                 "duracao": duration,
-                "tarifa_original": old_price,
-                "tarifa_promocional": price,
+                "tarifa_original": old_price_float,
+                "tarifa_promocional": price_float,
                 "conexao": connections,
                 "ponto_embarque": boarding_point,
                 "assentos_disponiveis": available_seats,
                 "total_assentos": total_seats,
                 "load_factor": load_factor,
                 "data_consulta": departure_date,
-                "Coletado_dia": collect_date  # Adiciona a data de coleta
+                "Coletado_dia": collect_date,
+                "PBD": pbd
             })
 
         except Exception as e:
@@ -187,6 +223,8 @@ def scrape_guanabara_trips(origin_slug, origin_name, destination_slug, destinati
 # Configurar o driver
 options = webdriver.ChromeOptions()
 options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/91.0.4472.124")
+options.add_argument("--lang=pt-BR")
+options.add_argument("--accept-charset=UTF-8")
 driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
 
 # Definir a data base com base na escolha do usuario
@@ -203,7 +241,7 @@ while True:
     else:
         print("Opcao invalida! Por favor, digite 'Hoje' ou 'Amanha'.")
 
-# Data de coleta (data em que o script foi executado)
+# Data de coleta
 collect_date = datetime.now().strftime("%d-%m-%Y")
 
 # Definir os dias futuros para coletar snapshots
