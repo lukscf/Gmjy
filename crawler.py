@@ -46,21 +46,6 @@ def create_slug(city_name):
     slug = unidecode(city_name.lower()).replace(" - ", "-").replace(" ", "_")
     return slug
 
-# Carregar a lista de cidades do arquivo CSV no GitHub
-cities_url = "https://raw.githubusercontent.com/lukscf/Flix/main/brazilian-cities.csv"
-print("Carregando lista de cidades do GitHub...")
-cities_df = pd.read_csv(cities_url, encoding='latin1')  # Usar latin1 para evitar UnicodeDecodeError
-
-# Construir o dicionario de cidades
-cities = {}
-for idx, row in cities_df.iterrows():
-    city_name = unidecode(row["city"])  # Remove acentos do nome da cidade
-    city_name_with_uf = f"{city_name} - {row['state']}"
-    cities[str(idx + 1)] = {
-        "name": city_name_with_uf,
-        "slug": create_slug(city_name_with_uf)
-    }
-
 # Lista de pares de cidades a processar
 city_pairs = [
     ("Fortaleza - CE", "Recife - PE"),
@@ -73,24 +58,35 @@ city_pairs = [
 ]
 
 # Funcao para obter slugs das cidades a partir dos nomes
-def get_city_slugs(origin_name, destination_name, cities):
-    origin_entry = next((city for city in cities.values() if city["name"].lower() == origin_name.lower()), None)
-    destination_entry = next((city for city in cities.values() if city["name"].lower() == destination_name.lower()), None)
+def get_city_slugs(origin_name, destination_name):
+    # Gerar slugs diretamente dos nomes das cidades
+    origin_slug = create_slug(origin_name)
+    destination_slug = create_slug(destination_name)
     
-    if not origin_entry or not destination_entry:
+    # Verificar se os nomes sao validos
+    if not origin_name or not destination_name:
         print(f"Erro: Cidade(s) nao encontrada(s) - Origem: {origin_name}, Destino: {destination_name}")
         return None, None, None, None
     
-    return origin_entry["slug"], origin_name, destination_entry["slug"], destination_name
+    return origin_slug, origin_name, destination_slug, destination_name
 
 # Funcao para testar combinacoes de cidades com e sem "-todos"
 def test_city_combinations(driver, origin_base, destination_base, departure_date):
-    combinations = [
-        (f"{origin_base}-todos", f"{destination_base}-todos"),
-        (f"{origin_base}-todos", destination_base),
-        (origin_base, f"{destination_base}-todos"),
-        (origin_base, destination_base),
-    ]
+    # Priorizar "-todos" para Sao Paulo - SP e Brasilia - DF
+    if "sao_paulo-sp" in origin_base and "brasilia-df" in destination_base:
+        combinations = [
+            (f"{origin_base}-todos", f"{destination_base}-todos"),  # Priorizar esta combinacao
+            (f"{origin_base}-todos", destination_base),
+            (origin_base, f"{destination_base}-todos"),
+            (origin_base, destination_base),
+        ]
+    else:
+        combinations = [
+            (f"{origin_base}-todos", f"{destination_base}-todos"),
+            (f"{origin_base}-todos", destination_base),
+            (origin_base, f"{destination_base}-todos"),
+            (origin_base, destination_base),
+        ]
 
     for origin_slug, destination_slug in combinations:
         url = f"https://www.viajeguanabara.com.br/onibus/{origin_slug}/{destination_slug}?departureDate={departure_date}&passengers=1:1"
@@ -253,7 +249,7 @@ for origin_name, destination_name in city_pairs:
     print(f"\n=== Processando par de cidades: {origin_name} -> {destination_name} ===")
     
     # Obter slugs das cidades
-    origin_base, origin_name, destination_base, destination_name = get_city_slugs(origin_name, destination_name, cities)
+    origin_base, origin_name, destination_base, destination_name = get_city_slugs(origin_name, destination_name)
     
     if not origin_base or not destination_base:
         print(f"Pulando par {origin_name} -> {destination_name} devido a erro nas cidades.")
