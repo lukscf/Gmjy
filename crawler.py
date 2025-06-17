@@ -15,9 +15,14 @@ from unidecode import unidecode
 def convert_price(price_text):
     if price_text == "N/A":
         return None
+    if not isinstance(price_text, str):
+        print(f"Erro: price_text não é uma string: {price_text}")
+        return None
     try:
-        # Remove "R$" e substitui virgula por ponto
-        cleaned_price = price_text.replace("R$", "").replace(",", ".").strip()
+        # Remove "R$" and strip whitespace
+        cleaned_price = price_text.replace("R$", "").strip()
+        # Remove thousands separator (period) and replace decimal comma with period
+        cleaned_price = cleaned_price.replace(".", "").replace(",", ".")
         return float(cleaned_price)
     except (ValueError, AttributeError) as e:
         print(f"Erro ao converter preco '{price_text}': {e}")
