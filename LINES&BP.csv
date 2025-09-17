@@ -1,21 +1,26 @@
 BP,LINE
-Catedral Turismo,BRN0603
-Catedral Turismo,BRN0801
-Catedral Turismo,BRN0702
-Catedral Turismo,BRN1001
-Catedral Turismo,BRN1002
-Catedral Turismo,BR1001
-Catedral Turismo,BR1002
-Catedral Turismo,BR0702
-Catedral Turismo,BRN1004
-Catedral Turismo,BR1004
-Catedral Turismo,BRN1005
-Catedral Turismo,BR1005
-Santa Maria,BRN201
-Adamantina,BRN0101
-Adamantina,BRN0103
-Adamantina,BR0101
-PRIMAR,BR0106
-PRIMAR,BRN0106
-PRIMAR,BR0102
-PRIMAR,BRN0102
+Catedral Turismo,BRN0603,Goiânia x Natal
+Catedral Turismo,BRN0801,São Paulo x Salvador
+Catedral Turismo,BRN0702,Brasília x São Paulo
+Catedral Turismo,BRN1001,Recife x Salvador
+Catedral Turismo,BRN1002,Recife x Fortaleza
+Catedral Turismo,BR1001,Recife x Salvador
+Catedral Turismo,BR1002,Recife x Fortaleza
+Catedral Turismo,BR0702,Brasília x São Paulo
+Catedral Turismo,BRN1004,Fortaleza x Natal
+Catedral Turismo,BR1004,Fortaleza x Natal
+Catedral Turismo,BRN1005,Natal x Salvador
+Catedral Turismo,BR1005,Natal x Salvador
+Santa Maria,BRN0201,Guarulhos x São José dos Pinhais
+Santa Maria,BR0201,Guarulhos x São José dos Pinhais
+Adamantina,BRN0101,São Paulo x Rio de Janeiro
+Adamantina,BRN0103,Campinas x Rio de Janeiro
+Adamantina,BR0103,Campinas x Rio de Janeiro
+Adamantina,BR0101,São Paulo x Rio de Janeiro
+PRIMAR,BRN0102,Campinas x Angra dos Reis
+PRIMAR,BR0102,Campinas x Angra dos Reis
+PRIMAR,BR0104,Sorocaba x Angra dos Reis
+PRIMAR,BRN0104,Sorocaba x Angra dos Reis
+LEVARE,BRN0704,Guarulhos x Uberlândia
+GADOTTI,BRN0207,São Paulo x Balneário Camboriú
+GADOTTI,BRN0206,São Paulo x Blumenau
